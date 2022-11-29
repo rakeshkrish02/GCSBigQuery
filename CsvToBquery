@@ -1,0 +1,107 @@
+import java.util.ArrayList;
+import java.io.IOException;
+import java.util.*;
+
+import org.apache.beam.sdk.Pipeline;
+import org.apache.beam.sdk.io.Compression;
+import org.apache.beam.sdk.io.TextIO;
+import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO;
+import org.apache.beam.sdk.options.PipelineOptions;
+import org.apache.beam.sdk.options.PipelineOptionsFactory;
+import org.apache.beam.sdk.options.ValueProvider;
+import org.apache.beam.sdk.transforms.*;
+import org.apache.beam.sdk.values.PCollection;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.api.services.bigquery.Bigquery.Datasets.List;
+import com.google.api.services.bigquery.model.TableFieldSchema;
+import com.google.api.services.bigquery.model.TableRow;
+import com.google.api.services.bigquery.model.TableSchema;
+
+public class CsvToBquery {
+
+public static void main(String[] args) throws IOException {
+// TODO Auto-generated method stub
+
+PipelineOptions pipelineoptions = PipelineOptionsFactory.create();
+Pipeline p = Pipeline.create(pipelineoptions);
+
+PCollection<String> lines = p.apply("Read File", TextIO.read()
+.from("C:\\Users\\Aishwarya\\OneDrive\\Desktop\\output.tsv").withCompression(Compression.GZIP));
+
+lines.apply("Convert Each line to TableRow", ParDo.of(new DoFn<String, TableAndRow>() {
+
+@ProcessElement
+public void processElement(ProcessContext c) {
+TableAndRow output_row = new TableAndRow();
+String[] arr = c.element().trim().split("\t");
+output_row = getRow(arr);
+c.output(output_row);
+}
+})).apply("Write to Big Query",
+BigQueryIO.<TableAndRow>write().to((ValueProvider<String>) ParDo.of(new DoFn<TableAndRow, String>() {
+@ProcessElement
+public void processElement(ProcessContext c) {
+TableAndRow tr = c.element();
+c.output(tr.getTab_name());
+}
+
+})).withFormatFunction((TableAndRow rec) -> rec.getRow())
+.withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_APPEND)
+.withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_NEVER));
+
+p.run().waitUntilFinish();
+}
+
+public static boolean searchList(String[] strings, String searchString) {
+return Arrays.asList(strings).contains(searchString);
+}
+
+public static TableAndRow getRow(String[] arr) {
+TableAndRow obj = new TableAndRow();
+if (arr.length > 0) {
+// Product Details
+if (searchList(arr, "productdetails") == true) {
+TableRow row = new TableRow();
+row.set("eventType", "");
+if (arr[50] != " ") {
+row.set("visitorId", arr[50]);
+} else {
+row.set("visitorId", arr[333]);
+}
+row.set("eventTime", arr[39]);
+row.set("experimentIds", arr[148]);
+row.set("productDetails.product.id", arr[945]);
+row.set("userInfo.userId", "");
+row.set("userInfo.ipAddress", arr[319]);
+row.set("userInfo.userAgent", arr[1084]);
+row.set("userInfo.directUserRequest", "");
+row.set("uri", arr[450]);
+row.set("referrerUri", arr[1170]);
+// TableAndRow output_row = new TableAndRow();
+obj.setTab_name("Detail Page View");
+obj.setRow(row);
+}
+
+// Homepage
+if (searchList(arr, "homepage1") == true) {
+TableRow row = new TableRow();
+row.set("eventType", "");
+if (arr[50] != " ") {
+row.set("visitorId", arr[50]);
+} else {
+row.set("visitorId", arr[333]);
+}
+// TableAndRow output_row = new TableAndRow();
+obj.setTab_name("Home Page View");
+obj.setRow(row);
+
+}
+
+}
+return obj;
+
+}
+
+}
